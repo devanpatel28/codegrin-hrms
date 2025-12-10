@@ -9,8 +9,8 @@ import { ROUTES } from '../../constants/RoutesContants';
 const AdminLogin = () => {
   const navigate = useNavigate();
   const [formData, setFormData] = useState({
-    admin_email: '',
-    admin_password: ''
+    admin_email: 'devanbhensdadiya123@gmail.com',
+    admin_password: 'test'
   });
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
@@ -28,7 +28,7 @@ const AdminLogin = () => {
           // Verify token by making a profile request
           await adminAuthAPI.getProfile(adminToken);
           // Token is valid, redirect to dashboard
-          navigate(ROUTES.HRMS.ADMIN.DASHBOARD, { replace: true });
+          navigate(ROUTES.ADMIN.DASHBOARD, { replace: true });
         } catch (error) {
           // Token is invalid, clear storage
           localStorage.removeItem('adminToken');
@@ -67,7 +67,7 @@ const AdminLogin = () => {
       if (data.success) {
         localStorage.setItem('adminToken', data.token);
         localStorage.setItem('adminData', JSON.stringify(data.admin));
-        navigate(ROUTES.HRMS.ADMIN.DASHBOARD, { replace: true });
+        navigate(ROUTES.ADMIN.DASHBOARD, { replace: true });
       }
     } catch (err) {
       setError(err.response?.data?.message || 'Login failed. Please try again.');
@@ -144,7 +144,7 @@ const AdminLogin = () => {
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-500 hover:text-gray-300 transition-colors"
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-500 hover:text-gray-300 transition-colors cursor-pointer"
                 >
                   {showPassword ? (
                     <Icon icon="mdi:eye-off-outline" className="h-5 w-5" />

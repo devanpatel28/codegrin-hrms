@@ -1,8 +1,9 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Navigate, useParams, useNavigate } from "react-router-dom";
 import { ROUTES } from "../../constants/RoutesContants";
-import { PORTFOLIO } from "../../constants/PortfolioConstants";
+import { portfolioAPI } from "../../utils/api";
 import BorderButton from "../../components/Buttons/BorderButton";
+import { Skeleton } from "@/components/ui/skeleton";
 import { gsap } from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 
@@ -13,8 +14,11 @@ const ProjectDetails = () => {
   const navigate = useNavigate();
   const { slug } = useParams();
   const [portfolio, setPortfolio] = useState(null);
-  const [currentIndex, setCurrentIndex] = useState(null);
+  const [nextProject, setNextProject] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+  const [imageLoadStatus, setImageLoadStatus] = useState({});
+  
   const clipperRefs = useRef([]);
   const titleFillRef = useRef(null);
   const nextProjectRef = useRef(null);
@@ -22,16 +26,36 @@ const ProjectDetails = () => {
 
   // Fetch portfolio data based on slug
   useEffect(() => {
-    if (slug) {
-      const foundPortfolio = PORTFOLIO.find(p => p.slug === slug);
-      const foundIndex = PORTFOLIO.findIndex(p => p.slug === slug);
+    const fetchPortfolio = async () => {
+      setLoading(true);
+      setError(false);
       
-      if (foundPortfolio) {
-        setPortfolio(foundPortfolio);
-        setCurrentIndex(foundIndex);
+      try {
+        const response = await portfolioAPI.getBySlug(slug);
+        setPortfolio(response.data.portfolio);
+        setNextProject(response.data.nextPortfolio);
+        
+        // Initialize image load status
+        const initialLoadStatus = {
+          header: false,
+          nextHeader: false
+        };
+        
+        response.data.portfolio.images?.forEach((img, idx) => {
+          initialLoadStatus[`image_${idx}`] = false;
+        });
+        
+        setImageLoadStatus(initialLoadStatus);
+      } catch (error) {
+        console.error("Error fetching portfolio:", error);
+        setError(true);
+      } finally {
+        setLoading(false);
       }
-      
-      setLoading(false);
+    };
+
+    if (slug) {
+      fetchPortfolio();
     }
   }, [slug]);
 
@@ -40,51 +64,44 @@ const ProjectDetails = () => {
     window.scrollTo(0, 0);
   }, [slug]);
 
-  // Get next project data
-  const getNextProject = () => {
-    if (currentIndex !== null && PORTFOLIO.length > 0) {
-      const nextIndex = (currentIndex + 1) % PORTFOLIO.length;
-      return {
-        project: PORTFOLIO[nextIndex],
-        index: nextIndex
-      };
-    }
-    return null;
+  // Handle image load
+  const handleImageLoad = (imageKey) => {
+    setImageLoadStatus((prev) => ({
+      ...prev,
+      [imageKey]: true,
+    }));
   };
 
-  const nextProjectData = getNextProject();
-
   useEffect(() => {
-    if (!portfolio?.project_images) return;
+    if (!portfolio?.images || portfolio.images.length === 0) return;
 
     // Wait for all images to load before initializing animations
-    const imagePromises = portfolio.project_images.map((image) => {
+    const imagePromises = portfolio.images.map((image) => {
       return new Promise((resolve) => {
         const img = new Image();
         img.onload = resolve;
-        img.onerror = resolve; // Still resolve on error to avoid hanging
-        img.src = portfolio.image_path + image;
+        img.onerror = resolve;
+        img.src = image.image_url;
       });
     });
 
     Promise.all(imagePromises).then(() => {
-      // Small delay to ensure DOM has updated
       setTimeout(() => {
         // GSAP ScrollTrigger animation for clip-path
         clipperRefs.current.forEach((clip) => {
           if (clip) {
             gsap.fromTo(
               clip,
-              { clipPath: "inset(25% round 50px)" }, // start state
+              { clipPath: "inset(25% round 50px)" },
               {
-                clipPath: "inset(0% round 0px)", // end state
+                clipPath: "inset(0% round 0px)",
                 ease: "none",
                 scrollTrigger: {
                   trigger: clip,
-                  start: "top 100%", // when image enters viewport
-                  end: "bottom 100%", // until it passes
+                  start: "top 100%",
+                  end: "bottom 100%",
                   scrub: true,
-                  markers: false, // set to true to debug
+                  markers: false,
                 },
               }
             );
@@ -92,30 +109,27 @@ const ProjectDetails = () => {
         });
 
         // Next project title fill animation
-        if (nextProjectRef.current) {
+        if (nextProjectRef.current && nextProject) {
           gsap.to(titleFillRef.current, {
             scrollTrigger: {
               trigger: nextProjectRef.current,
               start: "top 100%",
               end: "bottom 100%",
-              scrub: true, // smooth with scroll
+              scrub: true,
               onLeave: () => {
-                // Navigate to next project when animation is done
-                if (nextProjectData) {
-                  // Kill all ScrollTrigger instances before navigation
-                  ScrollTrigger.getAll().forEach((trigger) => trigger.kill());
-                  
-                  // Navigate using slug instead of state
-                  navigate(`${ROUTES.PROJECT_DETAILS}/${nextProjectData.project.slug}`, {
-                    replace: false
-                  });
-                  
-                  // Scroll to top
-                  if (window.lenis) {
-                    window.lenis.scrollTo(0, { immediate: true });
-                  } else {
-                    window.scrollTo(0, 0);
-                  }
+                // Kill all ScrollTrigger instances before navigation
+                ScrollTrigger.getAll().forEach((trigger) => trigger.kill());
+                
+                // Navigate to next project
+                navigate(`${ROUTES.PROJECT_DETAILS}/${nextProject.slug}`, {
+                  replace: false
+                });
+                
+                // Scroll to top
+                if (window.lenis) {
+                  window.lenis.scrollTo(0, { immediate: true });
+                } else {
+                  window.scrollTo(0, 0);
                 }
               }
             }
@@ -135,6 +149,7 @@ const ProjectDetails = () => {
             }
           });
         }
+        
         ScrollTrigger.refresh();
       }, 0);
     });
@@ -143,19 +158,51 @@ const ProjectDetails = () => {
     return () => {
       ScrollTrigger.getAll().forEach((trigger) => trigger.kill());
     };
-  }, [portfolio, currentIndex, nextProjectData, navigate]);
+  }, [portfolio, nextProject, navigate]);
 
-  // Show loading while fetching portfolio data
+  // Show loading skeleton
   if (loading) {
     return (
-      <div className="w-full flex justify-center items-center min-h-screen">
-        <div className="text-white text-lg">Loading...</div>
+      <div className="w-full">
+        {/* Header Skeleton */}
+        <div className="relative min-h-screen w-full overflow-hidden">
+          <Skeleton className="absolute inset-0 w-full h-screen" />
+        </div>
+
+        {/* Details Skeleton */}
+        <div className="container grid grid-cols-1 lg:grid-cols-3 gap-8 mt-20">
+          <div className="lg:col-span-1">
+            <Skeleton className="h-8 w-48 mb-5" />
+            <div className="space-y-3">
+              <Skeleton className="h-6 w-full" />
+              <Skeleton className="h-6 w-full" />
+              <Skeleton className="h-6 w-full" />
+            </div>
+          </div>
+          <div className="lg:col-span-2">
+            <Skeleton className="h-8 w-32 mb-5" />
+            <div className="space-y-4">
+              <Skeleton className="h-4 w-full" />
+              <Skeleton className="h-4 w-full" />
+              <Skeleton className="h-4 w-3/4" />
+            </div>
+          </div>
+        </div>
+
+        {/* Images Skeleton */}
+        <div className="mt-20 space-y-8">
+          {[...Array(3)].map((_, index) => (
+            <div key={index} className="container">
+              <Skeleton className="w-full h-96 rounded-xl" />
+            </div>
+          ))}
+        </div>
       </div>
     );
   }
 
-  // If no portfolio found, redirect to portfolio page
-  if (!portfolio) {
+  // If error or no portfolio found, redirect
+  if (error || !portfolio) {
     return <Navigate to={ROUTES.PORTFOLIO} replace />;
   }
 
@@ -165,12 +212,26 @@ const ProjectDetails = () => {
       <div className="relative min-h-screen w-full overflow-hidden">
         <div className="absolute bg-black/50 w-full h-screen z-10 flex items-center justify-center text-shadow-lg/25 text-white font-bold text-2xl md:text-4xl lg:text-6xl xl:text-7xl">
           {portfolio.title}
-        </div>  
+        </div>
+        
+        {/* Header Image Skeleton */}
+        {!imageLoadStatus.header && (
+          <Skeleton className="absolute inset-0 w-full h-full" />
+        )}
+        
+        {/* Header Image */}
         <img
-          src={portfolio.image_path + "header.webp"}
-          className="absolute top-1/2 left-0 -translate-y-1/2 min-h-full min-w-none object-cover z-0"
+          src={portfolio.header_image_url || "/placeholder.webp"}
+          className={`absolute top-1/2 left-0 -translate-y-1/2 min-h-full min-w-none object-cover z-0 ${
+            !imageLoadStatus.header ? "hidden" : ""
+          }`}
           alt={portfolio.title}
-        />  
+          onLoad={() => handleImageLoad("header")}
+          onError={(e) => {
+            e.target.src = "/placeholder.webp";
+            handleImageLoad("header");
+          }}
+        />
       </div>
 
       {/* Details */}
@@ -180,7 +241,9 @@ const ProjectDetails = () => {
           <ul className="pl-2 md:pl-5">
             <li className="mb-1 text-lg">
               <strong className="mr-2 text-white">Tech Category:</strong>
-              <span className="text-secondary capitalize">{portfolio.tech_category.join(", ")}</span>
+              <span className="text-secondary capitalize">
+                {portfolio.categories?.map(cat => cat.name).join(", ")}
+              </span>
             </li>
             <li className="mb-1 text-lg">
               <strong className="mr-2 text-white">Project Type:</strong>
@@ -194,37 +257,52 @@ const ProjectDetails = () => {
         </div>
         <div className="lg:col-span-2">
           <h1 className="text-2xl font-bold mb-5">INFO</h1>
-          {portfolio.description.map((item, index) => (
+          {portfolio.descriptions?.map((description, index) => (
             <p
               key={index}
               className="mb-5 pl-2 md:pl-5 text-sm lg:text-base text-justify text-secondary"
             >
-              {item}
+              {description}
             </p>
           ))}
-          <BorderButton
-            title="Visit Link"
-            target="_blank"
-            link={portfolio.project_link}
-            className="mt-5 ml-5"
-          />
+          {portfolio.project_link && (
+            <BorderButton
+              title="Visit Link"
+              target="_blank"
+              link={portfolio.project_link}
+              className="mt-5 ml-5"
+            />
+          )}
         </div>
       </div>
 
       {/* Images */}
       <div className="mt-20">
-        {portfolio.project_images.map((image, index) => (
-          <div key={index} className="w-full relative tt-clipper">
+        {portfolio.images?.map((image, index) => (
+          <div key={image.id} className="w-full relative tt-clipper">
             <div
               ref={(el) => (clipperRefs.current[index] = el)}
               className="container relative flex justify-center items-center w-full min-h-screen overflow-hidden bg-primary-card-light tt-clipper-inner"
               style={{ clipPath: "inset(25% round 45px)" }}
             >
               <div className="absolute inset-0 -z-1 tt-clipper-bg">
+                {/* Image Skeleton */}
+                {!imageLoadStatus[`image_${index}`] && (
+                  <Skeleton className="w-full h-full" />
+                )}
+                
+                {/* Actual Image */}
                 <img
-                  src={portfolio.image_path + image}
-                  alt={portfolio.title}
-                  className="w-full h-full object-contain"
+                  src={image.image_url}
+                  alt={image.alt_text || portfolio.title}
+                  className={`w-full h-full object-contain ${
+                    !imageLoadStatus[`image_${index}`] ? "hidden" : ""
+                  }`}
+                  onLoad={() => handleImageLoad(`image_${index}`)}
+                  onError={(e) => {
+                    e.target.src = "/placeholder.webp";
+                    handleImageLoad(`image_${index}`);
+                  }}
                 />
               </div>
             </div>
@@ -233,23 +311,36 @@ const ProjectDetails = () => {
       </div>
 
       {/* Next Project Section */}
-      {nextProjectData && (
+      {nextProject && (
         <section 
           ref={nextProjectRef}
           className="next-project relative min-h-screen overflow-hidden"
         >
           <div className="bg absolute inset-0">
+            {/* Next Project Image Skeleton */}
+            {!imageLoadStatus.nextHeader && (
+              <Skeleton className="w-full h-full" />
+            )}
+            
+            {/* Next Project Background Image */}
             <img 
               ref={nextBgRef}
-              src={nextProjectData.project.image_path + "header.webp"} 
-              alt="Next Project Background"
-              className="w-full h-full object-cover"
+              src={nextProject.header_image_url || "/placeholder.webp"}
+              alt={`Next Project: ${nextProject.title}`}
+              className={`w-full h-full object-cover ${
+                !imageLoadStatus.nextHeader ? "hidden" : ""
+              }`}
+              onLoad={() => handleImageLoad("nextHeader")}
+              onError={(e) => {
+                e.target.src = "/placeholder.webp";
+                handleImageLoad("nextHeader");
+              }}
             />
           </div>
           <div className="next-project-inner relative z-10 flex items-center justify-center min-h-screen bg-black/50">
             <div className="text-center">
               <h2 ref={titleFillRef} className="text-2xl md:text-3xl lg:text-5xl font-bold">
-                  Next: {nextProjectData.project.title}
+                Next: {nextProject.title}
               </h2>
             </div>
           </div>

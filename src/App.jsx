@@ -1,5 +1,5 @@
 import React, { Suspense, useEffect } from "react";
-import { Routes, Route } from "react-router-dom";
+import { Routes, Route, useLocation } from "react-router-dom";
 import MainLayout from "./layouts/MainLayout";
 import { ROUTES } from "./constants/RoutesContants";
 import gsap from "gsap";
@@ -24,12 +24,26 @@ import PrivacyPolicy from "./pages/PrivacyPolicy";
 import usePreloader from "./hooks/usePreloader";
 import Preloader from "./components/Preloader";
 import AdminLogin from "./HRMS/admin/Login";
+import AdminLayout from "./HRMS/admin/Layout";
+import AdminDashboard from "./HRMS/admin/Dashboard";
+import AdminEmployees from "./HRMS/admin/Employees";
+import AdminAttendance from "./HRMS/admin/Attendance";
+import AdminPortfolio from "./HRMS/admin/web-manage/Portfolio";
+import AdminServices from "./HRMS/admin/web-manage/Services";
+import AdminCourses from "./HRMS/admin/web-manage/Courses";
+import AdminBlogs from "./HRMS/admin/web-manage/Blogs";
+import AdminAddPortfolio from "./HRMS/admin/web-manage/AddPortfolio";
+import ViewEditPortfolio from "./HRMS/admin/web-manage/ViewEditPortfolio";
+
 
 
 gsap.registerPlugin(ScrollTrigger);
 
 export default function App() {
   const isLoading = usePreloader();
+  const location = useLocation();
+  const isAdminRoute = location.pathname.startsWith("/admin");
+
   useEffect(() => {
     const lenis = new Lenis({
       duration: 1.5,
@@ -78,7 +92,7 @@ export default function App() {
 
   return (
     <>
-     <Preloader isVisible={isLoading} />
+     {!isAdminRoute && <Preloader isVisible={isLoading} />}
       <ScrollToTop />
         <Routes>
           <Route path={ROUTES.HOME} element={<MainLayout />}>
@@ -98,8 +112,20 @@ export default function App() {
             <Route path={ROUTES.PRIVACY} element={<PrivacyPolicy />} />
           </Route>
 
-          <Route path={ROUTES.HRMS.ADMIN.HOME} element={<AdminLogin />}/>
-          <Route path={ROUTES.HRMS.ADMIN.LOGIN} element={<AdminLogin />}/>
+          <Route path={ROUTES.ADMIN.LOGIN} element={<AdminLogin />}/>
+          
+          <Route path={ROUTES.ADMIN.HOME} element={<AdminLayout />}>
+            <Route path={ROUTES.ADMIN.DASHBOARD} element={<AdminDashboard />}/>
+            <Route path={ROUTES.ADMIN.EMPLOYEES} element={<AdminEmployees />}/>
+            <Route path={ROUTES.ADMIN.ATTENDANCE} element={<AdminAttendance />}/>
+            <Route path={ROUTES.ADMIN.WEBSITE_MANAGE.PORTFOLIO} element={<AdminPortfolio />}/>
+            <Route path={ROUTES.ADMIN.WEBSITE_MANAGE.ADD_PORTFOLIO} element={<AdminAddPortfolio />}/>
+            <Route path={ROUTES.ADMIN.WEBSITE_MANAGE.VIEW_PORTFOLIO+"/:id"} element={<ViewEditPortfolio />}/>
+            <Route path={ROUTES.ADMIN.WEBSITE_MANAGE.SERVICES} element={<AdminServices />}/>
+            <Route path={ROUTES.ADMIN.WEBSITE_MANAGE.COURSES} element={<AdminCourses />}/>
+            <Route path={ROUTES.ADMIN.WEBSITE_MANAGE.BLOGS} element={<AdminBlogs />}/>
+            
+          </Route>
           <Route path="*" element={<NotFound />} />
         </Routes>
     </>

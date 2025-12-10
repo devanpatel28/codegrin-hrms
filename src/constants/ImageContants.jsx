@@ -5,6 +5,7 @@ const TEAM_BASE = BASE_URL + "team/";
 
 export const IMAGE_ASSETS = {
   LOGO: LOGO_BASE + "logo-light.webp",
+  LOGO_DARK: LOGO_BASE + "logo-dark.webp",
   LOGO_SYMBOL: LOGO_BASE + "logo-light-symbol.webp",
   SCROLL_TOP: LOGO_BASE + "scroll_top.svg",
   NOT_FOUND: BASE_URL + "404.gif",
