@@ -4,9 +4,11 @@ import { Icon } from "@iconify/react/dist/iconify.js";
 import { portfolioAPI, categoryAPI } from "@/utils/api";
 import { ROUTES } from "@/constants/RoutesContants";
 import { ICON_ASSETS } from "@/constants/IconConstant";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
+
 import {
   Table,
   TableBody,
@@ -15,6 +17,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+
 import {
   Card,
   CardContent,
@@ -22,7 +25,9 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+
 import { Badge } from "@/components/ui/badge";
+
 import {
   Select,
   SelectContent,
@@ -30,26 +35,22 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import ImagePreviewDialog from "@/components/ImagePreviewDialog";
 
 export default function AdminPortfolio() {
   const navigate = useNavigate();
   const [portfolios, setPortfolios] = useState([]);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  // const [error, setError] = useState(null);
 
-  // Filter states
+  // Filters
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [selectedType, setSelectedType] = useState("all");
   const [sortBy, setSortBy] = useState("newest");
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewImage, setPreviewImage] = useState(null);
 
   useEffect(() => {
     fetchData();
@@ -57,45 +58,50 @@ export default function AdminPortfolio() {
 
   const fetchData = async () => {
     setLoading(true);
-    setError(null);
     try {
       const [portfolioRes, categoryRes] = await Promise.all([
         portfolioAPI.getAll(),
         categoryAPI.getAll(),
       ]);
+
       setPortfolios(portfolioRes.data.portfolios || []);
       setCategories(categoryRes.data.categories || []);
     } catch (err) {
-      console.error("Error fetching data:", err);
-      setError("Failed to load portfolios. Please try again.");
+      console.error(err);
     } finally {
       setLoading(false);
     }
   };
 
-  // Filtered and sorted portfolios
+  // Get header image from images[]
+  const getHeaderImage = (portfolio) => {
+    const headerImg = portfolio.images?.find((img) => img.is_header === 1);
+    return headerImg?.image_url || "/placeholder.webp";
+  };
+
+  // Filtering + Sorting
   const filteredPortfolios = useMemo(() => {
     let filtered = [...portfolios];
 
-    // Search filter
+    // Search
     if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
+      const q = searchQuery.toLowerCase();
       filtered = filtered.filter(
         (p) =>
-          p.title?.toLowerCase().includes(query) ||
-          p.slug?.toLowerCase().includes(query) ||
-          p.publisher_name?.toLowerCase().includes(query)
+          p.title?.toLowerCase().includes(q) ||
+          p.slug?.toLowerCase().includes(q) ||
+          p.publisher_name?.toLowerCase().includes(q)
       );
     }
 
-    // Category filter
+    // Category
     if (selectedCategory !== "all") {
       filtered = filtered.filter((p) =>
         p.categories?.some((cat) => cat.slug === selectedCategory)
       );
     }
 
-    // Project type filter
+    // Project Type
     if (selectedType !== "all") {
       filtered = filtered.filter((p) => p.project_type === selectedType);
     }
@@ -108,9 +114,9 @@ export default function AdminPortfolio() {
         case "oldest":
           return new Date(a.created_at) - new Date(b.created_at);
         case "title-asc":
-          return (a.title || "").localeCompare(b.title || "");
+          return a.title.localeCompare(b.title);
         case "title-desc":
-          return (b.title || "").localeCompare(a.title || "");
+          return b.title.localeCompare(a.title);
         default:
           return 0;
       }
@@ -119,20 +125,16 @@ export default function AdminPortfolio() {
     return filtered;
   }, [portfolios, searchQuery, selectedCategory, selectedType, sortBy]);
 
-  const handleAddNew = () => {
-    navigate(ROUTES.ADMIN.WEBSITE_MANAGE.ADD_PORTFOLIO);
-  };
-
   const handleView = (portfolio) => {
     navigate(`${ROUTES.ADMIN.WEBSITE_MANAGE.PORTFOLIO}/${portfolio.id}`);
   };
-//   const handleLiveView = (portfolio) => {
-//   window.open(`${ROUTES.PROJECT_DETAILS}/${portfolio.slug}`, "_blank");
-// };
 
-
-
-
+  const handleAddNew = () => {
+    navigate(ROUTES.ADMIN.WEBSITE_MANAGE.ADD_PORTFOLIO);
+  };
+   const handleCategory = () => {
+    navigate(ROUTES.ADMIN.WEBSITE_MANAGE.CATEGORIES);
+  };
 
   const clearFilters = () => {
     setSearchQuery("");
@@ -141,307 +143,235 @@ export default function AdminPortfolio() {
     setSortBy("newest");
   };
 
-  const hasActiveFilters =
-    searchQuery ||
-    selectedCategory !== "all" ||
-    selectedType !== "all" ||
-    sortBy !== "newest";
-
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
-          <Spinner size="large" />
-          <p className="text-white text-sm">Loading portfolios...</p>
-        </div>
+        <Spinner size="large" />
       </div>
     );
   }
 
   return (
     <div className="p-4 md:p-6 lg:p-8 space-y-6">
-      {/* Main Content */}
+      <ImagePreviewDialog
+        open={previewOpen}
+        onClose={() => setPreviewOpen(false)}
+        imageUrl={previewImage}
+      />
+
       <Card className="bg-neutral-900 border-neutral-800">
         <CardHeader className="border-b border-neutral-800">
-          <div className="flex flex-col gap-4">
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-              <div>
-                <CardTitle className="text-2xl font-bold text-white flex items-center gap-2">
-                  Portfolio Management
-                </CardTitle>
-                <CardDescription className="text-slate-400 mt-1">
-                  {filteredPortfolios.length} of {portfolios.length} projects
-                </CardDescription>
-              </div>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-2xl text-white font-bold">
+                Portfolio Management
+              </CardTitle>
+              <CardDescription className="text-slate-400">
+                {filteredPortfolios.length} of {portfolios.length} projects
+              </CardDescription>
+            </div>
+
+          <div className="flex gap-3">
               <Button
-                onClick={handleAddNew}
-                className="bg-primary hover:bg-primary/90 text-white font-medium cursor-pointer"
+              variant="default"
+              onClick={handleCategory}
+              className="bg-primary text-white hover:bg-primary/90"
+            >
+              <Icon icon={ICON_ASSETS.CATEGORY} /> Manage Category
+            </Button>
+              <Button
+              onClick={handleAddNew}
+              className="bg-primary text-white hover:bg-primary/90"
+            >
+              <Icon icon={ICON_ASSETS.ADD}/> Add Portfolio
+            </Button>
+          </div>
+          </div>
+
+          {/* Filters */}
+          <div className="flex gap-3 mt-6">
+            {/* Search */}
+            <div className="relative w-full">
+              <Icon
+                icon={ICON_ASSETS.SEARCH}
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-white w-5 h-5"
+              />
+              <Input
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search..."
+                className="bg-neutral-800 border-neutral-700 text-white pl-10"
+              />
+            </div>
+
+            {/* Category */}
+            <Select
+              value={selectedCategory}
+              onValueChange={setSelectedCategory}
+            >
+              <SelectTrigger className="bg-neutral-800 border-neutral-700 text-white cursor-pointer">
+                <SelectValue placeholder="Category" />
+              </SelectTrigger>
+              <SelectContent className="bg-neutral-800 border-neutral-700 text-white">
+                <SelectItem value="all" className="cursor-pointer">All Categories</SelectItem>
+                {categories.map((cat) => (
+                  <SelectItem key={cat.id} value={cat.slug} className="cursor-pointer">
+                    {cat.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            {/* Sorting */}
+            <Select value={sortBy} onValueChange={setSortBy}>
+              <SelectTrigger className="bg-neutral-800 border-neutral-700 text-white cursor-pointer">
+                <SelectValue placeholder="Sort" />
+              </SelectTrigger>
+              <SelectContent className="bg-neutral-800 border-neutral-700 text-white">
+                <SelectItem value="newest" className="cursor-pointer">Newest</SelectItem>
+                <SelectItem value="oldest" className="cursor-pointer">Oldest</SelectItem>
+                <SelectItem value="title-asc" className="cursor-pointer">Title A–Z</SelectItem>
+                <SelectItem value="title-desc" className="cursor-pointer">Title Z–A</SelectItem>
+              </SelectContent>
+            </Select>
+
+            {/* Reset */}
+            {(searchQuery ||
+              selectedCategory !== "all" ||
+              selectedType !== "all" ||
+              sortBy !== "newest") && (
+              <Button
+                variant="ghost"
+                onClick={clearFilters}
+                className="text-white hover:bg-neutral-800"
               >
-                <Icon icon="mdi:plus" className="w-5 h-5 mr-2" />
-                Add New Portfolio
+                <Icon icon="mdi:filter-off" className="w-5 h-5" />
               </Button>
-            </div>
-
-            {/* Filters */}
-            <div className="flex gap-3">
-              {/* Search */}
-              <div className="w-full relative">
-                <Icon
-                  icon={ICON_ASSETS.SEARCH}
-                  className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-white pointer-events-none"
-                />
-                <Input
-                  placeholder="Search by title, slug, or publisher..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="bg-neutral-800 border-neutral-700 text-white pl-10"
-                />
-              </div>
-
-              {/* Category Filter */}
-              <div className="md:col-span-3">
-                <Select
-                  value={selectedCategory}
-                  onValueChange={setSelectedCategory}
-                >
-                  <SelectTrigger className="bg-neutral-800 border-neutral-700 text-white">
-                    <SelectValue placeholder="All Categories" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-neutral-800 border-neutral-700">
-                    <SelectItem value="all" className="text-white">
-                      All Categories
-                    </SelectItem>
-                    {categories.map((cat) => (
-                      <SelectItem
-                        key={cat.id}
-                        value={cat.slug}
-                        className="text-white capitalize"
-                      >
-                        {cat.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Sort By */}
-              <div className="md:col-span-2 ">
-                <Select value={sortBy} onValueChange={setSortBy}>
-                  <SelectTrigger className="bg-neutral-800 border-neutral-700 text-white">
-                    <SelectValue placeholder="Sort By" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-neutral-800 border-neutral-700">
-                    <SelectItem value="newest" className="text-white">
-                      Newest First
-                    </SelectItem>
-                    <SelectItem value="oldest" className="text-white">
-                      Oldest First
-                    </SelectItem>
-                    <SelectItem value="title-asc" className="text-white">
-                      Title (A-Z)
-                    </SelectItem>
-                    <SelectItem value="title-desc" className="text-white">
-                      Title (Z-A)
-                    </SelectItem>
-                  </SelectContent>  
-                </Select>
-              </div>
-
-              {/* Clear Filters */}
-              {hasActiveFilters && (
-                <div className="md:col-span-1">
-                  <Button
-                    onClick={clearFilters}
-                    variant="ghost"
-                    className="w-full text-white hover:bg-neutral-800"
-                    title="Clear all filters"
-                  >
-                    <Icon icon="mdi:filter-off" className="w-5 h-5" />
-                  </Button>
-                </div>
-              )}
-            </div>
+            )}
           </div>
         </CardHeader>
 
-        <CardContent className="p-6">
-          {error && (
-            <div className="mb-4 p-4 bg-red-500/10 border border-red-500/20 rounded-lg flex items-center gap-3">
-              <Icon
-                icon="mdi:alert-circle"
-                className="w-5 h-5 text-red-400 flex-shrink-0"
-              />
-              <p className="text-red-400 text-sm">{error}</p>
-              <Button
-                onClick={fetchData}
-                variant="ghost"
-                size="sm"
-                className="ml-auto text-red-400 hover:bg-red-500/10"
-              >
-                Retry
-              </Button>
-            </div>
-          )}
+        <CardContent className="p-">
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow className="border-neutral-800 hover:bg-neutral-800/50">
+                  <TableHead className="w-16 text-white">#</TableHead>
+                  <TableHead className="w-24 text-white">Image</TableHead>
+                  <TableHead className="min-w-[200px] text-white">Title</TableHead>
+                  <TableHead className="text-white">Type</TableHead>
+                  <TableHead className="text-white">Publisher</TableHead>
+                  <TableHead className="w-32 text-white">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
 
-          {portfolios.length === 0 ? (
-            <div className="text-center py-12">
-              <div className="w-20 h-20 rounded-full bg-neutral-800 flex items-center justify-center mx-auto mb-4">
-                <Icon
-                  icon={ICON_ASSETS.PORTFOLIO}
-                  className="w-10 h-10 text-neutral-600"
-                />
-              </div>
-              <h3 className="text-lg font-medium text-white mb-2">
-                No portfolios yet
-              </h3>
-              <p className="text-white text-sm mb-6 max-w-md mx-auto">
-                Get started by creating your first portfolio project to showcase
-                your work
-              </p>
-              <Button
-                onClick={handleAddNew}
-                className="bg-primary hover:bg-primary/90 text-white font-medium cursor-pointer"
-              >
-                <Icon icon="mdi:plus" className="w-5 h-5 mr-2" />
-                Create First Portfolio
-              </Button>
-            </div>
-          ) : filteredPortfolios.length === 0 ? (
-            <div className="text-center py-12">
-              <div className="w-20 h-20 rounded-full bg-neutral-800 flex items-center justify-center mx-auto mb-4">
-                <Icon
-                  icon="mdi:file-search"
-                  className="w-10 h-10 text-neutral-600"
-                />
-              </div>
-              <h3 className="text-lg font-medium text-white mb-2">
-                No results found
-              </h3>
-              <p className="text-white text-sm mb-6">
-                Try adjusting your filters or search query
-              </p>
-              <Button
-                onClick={clearFilters}
-                className="bg-primary text-white hover:bg-primary/50 cursor-pointer"
-              >
-                <Icon icon="mdi:filter-off" className="w-5 h-5 mr-2" />
-                Clear Filters
-              </Button>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow className="border-neutral-800 hover:bg-transparent">
-                    <TableHead className="text-white font-semibold w-16">
-                      #
-                    </TableHead>
-                    <TableHead className="text-white font-semibold w-20">
-                      Image
-                    </TableHead>
-                    <TableHead className="text-white font-semibold min-w-[200px]">
-                      Title
-                    </TableHead>
-                    <TableHead className="text-white font-semibold">
-                      Type
-                    </TableHead>
-                    <TableHead className="text-white font-semibold">
-                      Publisher
-                    </TableHead>
-                    <TableHead className="text-white font-semibold  w-32">
-                      Actions
-                    </TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredPortfolios.map((portfolio, index) => (
+              <TableBody>
+                {filteredPortfolios.map((portfolio, index) => {
+                  const headerImage = getHeaderImage(portfolio);
+
+                  return (
                     <TableRow
                       key={portfolio.id}
-                      className="border-neutral-800 hover:bg-neutral-800/50 transition-colors group"
+                      className="border-neutral-800 hover:bg-neutral-800/50"
                     >
-                      <TableCell className="text-white font-medium">
-                        {index + 1}
-                      </TableCell>
+                      <TableCell className="text-white">{index + 1}</TableCell>
+
+                      {/* Thumbnail Image */}
                       <TableCell>
-                        <div className="w-32 h-16 rounded-lg overflow-hidden bg-neutral-800 border border-neutral-700">
-                          {portfolio.header_image_url ? (
+                        <div
+                          className="w-32 h-16 overflow-hidden rounded-lg bg-neutral-800 border border-neutral-700 flex items-center justify-center cursor-pointer"
+                          onClick={() => {
+                            const url = headerImage;
+
+                            if (
+                              url &&
+                              typeof url === "string" &&
+                              url.trim() !== "" &&
+                              !url.includes("placeholder.webp")
+                            ) {
+                              setPreviewImage(url);
+                              setPreviewOpen(true);
+                            }
+                          }}
+                        >
+                          {headerImage ? (
                             <img
-                              src={portfolio.header_image_url}
+                              src={headerImage}
                               alt={portfolio.title}
-                              className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-200"
+                              className="w-full h-full object-cover"
                               onError={(e) => {
-                                e.target.src = "/placeholder.webp";
+                                e.target.onerror = null;
+                                e.target.style.display = "none";
+                                e.target.parentNode.innerHTML = `
+                              <div class='flex items-center justify-center w-full h-full'>
+                                <svg class='w-8 h-8 text-neutral-500' fill='currentColor' viewBox='0 0 24 24'>
+                                  <path d='M21 5v14H3V5h18m0-2H3c-1.1 0-2 .9-2 
+                                  2v14c0 1.1.9 2 2 2h18c1.1 
+                                  0 2-.9 2-2V5c0-1.1-.9-2-2-2m-4.5 
+                                  9.5-2.25 3L12 12l-3.75 5H19l-2.5-3.5z'/>
+                                </svg>
+                              </div>
+                            `;
                               }}
                             />
                           ) : (
-                            <div className="w-full h-full flex items-center justify-center">
-                              <Icon
-                                icon="mdi:image-off"
-                                className="w-6 h-6 text-neutral-600"
-                              />
-                            </div>
+                            <Icon
+                              icon={ICON_ASSETS.BROKEN_IMAGE}
+                              className="w-8 h-8 text-neutral-500"
+                            />
                           )}
                         </div>
                       </TableCell>
+
+                      {/* Title */}
                       <TableCell>
-                        <div className="flex flex-col gap-1">
-                          <span className="text-white font-medium">
-                            {portfolio.title}
-                          </span>
-                          <span className="text-white text-xs mt-1 flex items-center gap-1">
-                           <div className="flex flex-wrap gap-1">
-                          {portfolio.categories?.map((cat, idx) => (
+                        <div className="text-white font-medium">
+                          {portfolio.title}
+                        </div>
+
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {portfolio.categories?.map((cat) => (
                             <Badge
-                              key={idx}
-                              variant="secondary"
-                              className="bg-primary/20 text-primary-light border-0 text-xs"
+                              key={cat.id}
+                              className="bg-primary/20 text-primary-light text-xs border-0"
                             >
                               {cat.name}
                             </Badge>
                           ))}
-                          
-                        </div>
-                          </span>
                         </div>
                       </TableCell>
-                    
+
+                      {/* Type */}
                       <TableCell>
-                        <Badge
-                          variant="outline"
-                          className="capitalize border-neutral-700 text-white"
-                        >
+                        <Badge className="border-neutral-700 bg-neutral-800 text-white">
                           {portfolio.project_type || "N/A"}
                         </Badge>
                       </TableCell>
-                      <TableCell>
-                        <span className="text-white text-sm">
-                          {portfolio.publisher_name || "-"}
-                        </span>
+
+                      {/* Publisher */}
+                      <TableCell className="text-white text-sm">
+                        {portfolio.publisher_name || "-"}
                       </TableCell>
-                      <TableCell className="text-right">
-                       <div className="flex items-center gap-2">
-                         {/* <Button
-                          onClick={() => handleLiveView(portfolio)}
-                          className="text-white border border-neutral-700 bg-neutral-800 hover:bg-neutral-700 cursor-pointer"
-                        >
-                          <Icon icon={ICON_ASSETS.EYE} className="w-4 h-4 mr-2" />
-                          View Live
-                        </Button> */}
-                         <Button
+
+                      {/* Actions */}
+                      <TableCell>
+                        <Button
                           onClick={() => handleView(portfolio)}
-                          className="text-white border border-neutral-700 bg-neutral-800 hover:bg-neutral-700 cursor-pointer"
+                          className="w-full bg-neutral-800 text-white border border-neutral-700 hover:bg-neutral-700"
                         >
-                          <Icon icon={ICON_ASSETS.EYE} className="w-4 h-4 mr-2" />
-                          View Details
+                          <Icon
+                            icon={ICON_ASSETS.EYE}
+                            className="w-4 h-4 mr-2"
+                          />
+                          View
                         </Button>
-                       </div>
                       </TableCell>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
         </CardContent>
       </Card>
     </div>

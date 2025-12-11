@@ -61,52 +61,46 @@ export const adminAuthAPI = {
 
 // Category API
 export const categoryAPI = {
-  // Get all categories (public)
-  getAll: () => 
-    api.get("/categories"),
+  getAll: () => api.get("/categories"),
+  getWithTotal: () => api.get("/categories/total"),
+  getById: (id) => api.get(`/categories/${id}`),
 
-  // Get category by ID (public)
-  getById: (id) => 
-    api.get(`/categories/${id}`),
-
-  // Add new category (admin only)
-  create: (payload, token) => 
+  create: (payload, token) =>
     api.post("/categories", payload, {
-      headers: { Authorization: `Bearer ${token}` }
+      headers: { Authorization: `Bearer ${token}` },
     }),
 
-  // Update category (admin only)
-  update: (id, payload, token) => 
+  update: (id, payload, token) =>
     api.put(`/categories/${id}`, payload, {
-      headers: { Authorization: `Bearer ${token}` }
+      headers: { Authorization: `Bearer ${token}` },
     }),
 
-  // Delete category (admin only)
-  delete: (id, token) => 
+  delete: (id, token) =>
     api.delete(`/categories/${id}`, {
-      headers: { Authorization: `Bearer ${token}` }
-    })
+      headers: { Authorization: `Bearer ${token}` },
+    }),
 };
 
-// Portfolio API
+
 export const portfolioAPI = {
-  // Get all portfolios (public)
+ 
   getAll: () => 
     api.get("/portfolios"),
 
-  // Get portfolio by ID (public)
+  getCarousel: (limit = 5) => api.get(`/portfolios/carousel?limit=${limit}`),
+  
   getById: (id) => 
     api.get(`/portfolios/${id}`),
 
-  // Get portfolio by slug (public)
+ 
   getBySlug: (slug) => 
     api.get(`/portfolios/slug/${slug}`),
 
-  // Get portfolios by category slug (public)
+ 
   getByCategory: (categorySlug) => 
     api.get(`/portfolios/category/${categorySlug}`),
 
-  // Add new portfolio (admin only, with images)
+ 
   create: (formData, token) => 
     api.post("/portfolios", formData, {
       headers: { 
@@ -115,7 +109,7 @@ export const portfolioAPI = {
       }
     }),
 
-  // Update portfolio (admin only, with optional images)
+ 
   update: (id, formData, token) => 
     api.put(`/portfolios/${id}`, formData, {
       headers: { 
@@ -124,7 +118,7 @@ export const portfolioAPI = {
       }
     }),
 
-  // Delete portfolio (admin only)
+ 
   delete: (id, token) => 
     api.delete(`/portfolios/${id}`, {
       headers: { Authorization: `Bearer ${token}` }

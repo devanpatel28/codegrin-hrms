@@ -11,5 +11,10 @@ export const ICON_ASSETS = {
     BLOGS: "mdi:post",
     SEARCH: "mdi:magnify",
     EYE:"mdi:eye",
-    LIVE:""
+    LIVE:"",
+    BROKEN_IMAGE:"mdi:image-broken",
+    DELETE:"mdi:delete",
+    DRAG:"mdi:drag",
+    ADD:"mdi:plus",
+    CATEGORY:"carbon:category",
 };

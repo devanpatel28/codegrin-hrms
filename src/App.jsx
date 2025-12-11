@@ -34,6 +34,7 @@ import AdminCourses from "./HRMS/admin/web-manage/Courses";
 import AdminBlogs from "./HRMS/admin/web-manage/Blogs";
 import AdminAddPortfolio from "./HRMS/admin/web-manage/AddPortfolio";
 import ViewEditPortfolio from "./HRMS/admin/web-manage/ViewEditPortfolio";
+import AdminCategories from "./HRMS/admin/web-manage/Categories";
 
 
 
@@ -124,6 +125,7 @@ export default function App() {
             <Route path={ROUTES.ADMIN.WEBSITE_MANAGE.SERVICES} element={<AdminServices />}/>
             <Route path={ROUTES.ADMIN.WEBSITE_MANAGE.COURSES} element={<AdminCourses />}/>
             <Route path={ROUTES.ADMIN.WEBSITE_MANAGE.BLOGS} element={<AdminBlogs />}/>
+            <Route path={ROUTES.ADMIN.WEBSITE_MANAGE.CATEGORIES} element={<AdminCategories />}/>
             
           </Route>
           <Route path="*" element={<NotFound />} />

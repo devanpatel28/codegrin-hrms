@@ -27,7 +27,8 @@ export const ROUTES = {
             VIEW_PORTFOLIO: "/admin/portfolio",
             SERVICES: "/admin/services",
             COURSES: "/admin/courses",
-            BLOGS: "/admin/blogs"
+            BLOGS: "/admin/blogs",
+            CATEGORIES:"/admin/categories",
         }
     }
 

@@ -7,6 +7,9 @@ import { ROUTES } from "../../constants/RoutesContants";
 import { portfolioAPI, categoryAPI } from "../../utils/api";
 import { Spinner } from "@/components/ui/spinner";
 
+import { ICON_ASSETS } from "@/constants/IconConstant";
+import { Icon } from "@iconify/react";
+
 gsap.registerPlugin(ScrollTrigger);
 
 export default function Portfolio() {
@@ -15,20 +18,23 @@ export default function Portfolio() {
   const [portfolioData, setPortfolioData] = useState([]);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
-  
+
   // Initialize from sessionStorage to persist loaded images
   const [imageLoadStatus, setImageLoadStatus] = useState(() => {
     const cached = sessionStorage.getItem("portfolioImageLoadStatus");
     return cached ? JSON.parse(cached) : {};
   });
-  
+
   const containerRef = useRef(null);
   const cardsRef = useRef([]);
   const filtersRef = useRef([]);
 
   // Persist image load status to sessionStorage whenever it changes
   useEffect(() => {
-    sessionStorage.setItem("portfolioImageLoadStatus", JSON.stringify(imageLoadStatus));
+    sessionStorage.setItem(
+      "portfolioImageLoadStatus",
+      JSON.stringify(imageLoadStatus)
+    );
   }, [imageLoadStatus]);
 
   // Fetch categories on mount
@@ -55,9 +61,9 @@ export default function Portfolio() {
         } else {
           response = await portfolioAPI.getByCategory(selectedCategory);
         }
-        
+
         setPortfolioData(response.data.portfolios || []);
-        
+
         // Only initialize load status for NEW portfolios (preserve existing)
         setImageLoadStatus((prev) => {
           const updated = { ...prev };
@@ -235,26 +241,53 @@ export default function Portfolio() {
                 onClick={() => handleCardClick(portfolio)}
               >
                 <div className="overflow-hidden rounded-xl relative">
-                  {/* Image Loading Spinner */}
+                  {/* Loading Spinner */}
                   {!imageLoadStatus[portfolio.id] && (
                     <div className="w-full h-64 flex items-center justify-center bg-primary-card">
                       <Spinner size="default" />
                     </div>
                   )}
-                  
-                  {/* Actual Header Image */}
-                  <img
-                    src={portfolio.header_image_url || "/placeholder.webp"}
-                    className={`rounded-lg group-hover:scale-110 transition-all duration-300 object-cover origin-center ${
-                      !imageLoadStatus[portfolio.id] ? "hidden" : ""
-                    }`}
-                    alt={portfolio.title}
-                    onLoad={() => handleImageLoad(portfolio.id)}
-                    onError={(e) => {
-                      e.target.src = "/placeholder.webp";
-                      handleImageLoad(portfolio.id);
-                    }}
-                  />
+
+                  {/* Determine header url */}
+                  {(() => {
+                    const header = portfolio.images?.find(
+                      (img) => img.is_header === 1
+                    );
+                    const url = header?.image_url || null;
+
+                    if (url) {
+                      return (
+                        <img
+                          src={url}
+                          className={`rounded-lg group-hover:scale-110 transition-all duration-300 object-cover origin-center ${
+                            !imageLoadStatus[portfolio.id] ? "hidden" : ""
+                          }`}
+                          alt={portfolio.title}
+                          onLoad={() => handleImageLoad(portfolio.id)}
+                          onError={(e) => {
+                            // prevent infinite loop
+                            if (!e.target.dataset.fallback) {
+                              e.target.dataset.fallback = "true";
+                              e.target.style.display = "none";
+                              handleImageLoad(portfolio.id); // stop spinner
+                            }
+                          }}
+                        />
+                      );
+                    }
+
+                    // no url -> show broken icon occupying full area
+                    return (
+                     <div className="w-full aspect-[3/2] flex items-center justify-center bg-neutral-900">
+  <Icon
+    icon={ICON_ASSETS.BROKEN_IMAGE}
+    height={100}
+    className="text-neutral-600"
+  />
+</div>
+
+                    );
+                  })()}
                 </div>
                 <div className="absolute -bottom-4 left-5">
                   <div className="flex gap-2">

@@ -15,15 +15,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-
-import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -62,6 +53,7 @@ import Cropper from "react-easy-crop";
 import ImagePreviewDialog from "@/components/ImagePreviewDialog";
 import ImageCropDialog from "@/components/ImageCropDialog";
 import { convertToWebP } from "@/utils/convertToWebP";
+import { ICON_ASSETS } from "@/constants/IconConstant";
 
 /* =============== SORTABLE DESCRIPTION ITEM =============== */
 function SortableDescriptionItem({
@@ -70,6 +62,7 @@ function SortableDescriptionItem({
   index,
   onUpdate,
   onDelete,
+  descriptionCount,
 }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } =
     useSortable({
@@ -95,7 +88,7 @@ function SortableDescriptionItem({
         className="mt-2 cursor-grab active:cursor-grabbing bg-neutral-700 hover:bg-neutral-600 px-2 py-1 rounded transition-colors"
         title="Drag to reorder"
       >
-        <Icon icon="mdi:drag" className="w-4 h-4 text-white" />
+        <Icon icon={ICON_ASSETS.DRAG} className="w-4 h-4 text-white" />
       </button>
 
       <Textarea
@@ -106,15 +99,18 @@ function SortableDescriptionItem({
         placeholder="Enter description paragraph..."
       />
 
-      <Button
-        variant="destructive"
-        size="icon"
-        onClick={() => onDelete(index)}
-        className="shrink-0"
-        title="Delete paragraph"
-      >
-        <Icon icon="mdi:delete" className="w-4 h-4" />
-      </Button>
+      {/** Hide delete button if total descriptions <= 2 */}
+      {onDelete && descriptionCount > 2 && (
+        <Button
+          variant="danger"
+          size="icon"
+          onClick={() => onDelete(index)}
+          className="shrink-0"
+          title="Delete paragraph"
+        >
+          <Icon icon={ICON_ASSETS.DELETE} className="w-5 h-5" />
+        </Button>
+      )}
     </div>
   );
 }
@@ -133,6 +129,13 @@ function SortableImageItem({ id, image, index, onDelete, onPreview }) {
     zIndex: isDragging ? 10 : 1,
   };
 
+  const safePreview = () => {
+    const url = image.image_url || image;
+    if (url && typeof url === "string" && url.trim() !== "") {
+      onPreview(url);
+    }
+  };
+
   return (
     <div
       ref={setNodeRef}
@@ -143,10 +146,10 @@ function SortableImageItem({ id, image, index, onDelete, onPreview }) {
       <button
         {...attributes}
         {...listeners}
-        className="absolute top-2 left-2 z-10 opacity-0 group-hover:opacity-100 bg-black/60 hover:bg-black/80 p-1.5 rounded transition-opacity"
+        className="absolute top-2 left-2 z-10 opacity-0 group-hover:opacity-100 bg-black/60 hover:bg-black/80 p-1.5 rounded transition-opacity cursor-grab active:cursor-grabbing"
         title="Drag to reorder"
       >
-        <Icon icon="mdi:drag" className="w-4 h-4 text-white" />
+        <Icon icon={ICON_ASSETS.DRAG} className="w-4 h-4 text-white" />
       </button>
 
       {/* Delete button */}
@@ -155,16 +158,16 @@ function SortableImageItem({ id, image, index, onDelete, onPreview }) {
           e.stopPropagation();
           onDelete(index);
         }}
-        className="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 bg-red-500/80 hover:bg-red-600 p-1.5 rounded transition-opacity"
+        className="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 bg-red-500/80 hover:bg-red-600 p-1.5 rounded transition-opacity cursor-pointer"
         title="Delete image"
       >
-        <Icon icon="mdi:delete" className="w-4 h-4 text-white" />
+        <Icon icon={ICON_ASSETS.DELETE} className="w-4 h-4 text-white" />
       </button>
 
       <img
         src={image.image_url || image}
         alt={image.alt_text || `Screenshot ${index + 1}`}
-        onClick={() => onPreview(image.image_url || image)}
+        onClick={safePreview}
         className="w-full h-40 object-cover select-none"
         draggable={false}
       />
@@ -192,6 +195,10 @@ export default function ViewEditPortfolio() {
 
   const [previewImage, setPreviewImage] = useState(null);
   const [showNavigationWarning, setShowNavigationWarning] = useState(false);
+  const [showSaveConfirm, setShowSaveConfirm] = useState(false);
+
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const [cropDialog, setCropDialog] = useState({
     isOpen: false,
@@ -205,6 +212,7 @@ export default function ViewEditPortfolio() {
     publisher_name: "",
     project_link: "",
     header_image_url: "",
+    project_type: "",
     selectedCategories: [],
     descriptions: [],
     images: [],
@@ -223,7 +231,6 @@ export default function ViewEditPortfolio() {
     })
   );
 
-  /* ---------- Load data ---------- */
   useEffect(() => {
     fetchData();
   }, [id]);
@@ -238,19 +245,42 @@ export default function ViewEditPortfolio() {
 
       const portfolioData = portfolioRes.data.portfolio;
 
+      // separate header image and screenshots
+      const headerImageObj =
+        portfolioData.images?.find((img) => img.is_header === 1) || null;
+
+      const screenshotImages =
+        portfolioData.images
+          ?.filter((img) => img.is_header === 0)
+          .map((img) => ({
+            image_url: img.image_url,
+            alt_text: img.alt_text || "",
+          })) || [];
+
       const initial = {
         title: portfolioData.title || "",
         slug: portfolioData.slug || "",
         publisher_name: portfolioData.publisher_name || "",
         project_link: portfolioData.project_link || "",
-        header_image_url: portfolioData.header_image_url || "",
+
+        // assign header image correctly
+        header_image_url: headerImageObj?.image_url || "",
+
+        project_type: portfolioData.project_type || "",
+
+        // categories
         selectedCategories: portfolioData.categories?.map((c) => c.id) || [],
+
+        // descriptions
         descriptions: portfolioData.descriptions || [],
-        images: portfolioData.images || [],
+
+        // only screenshots
+        images: screenshotImages,
       };
 
       setCategories(categoryRes.data.categories || []);
       setFormData(initial);
+
       setInitialFormData(JSON.parse(JSON.stringify(initial)));
     } catch (err) {
       console.error(err);
@@ -295,7 +325,6 @@ export default function ViewEditPortfolio() {
     }));
   };
 
-  // Descriptions
   const handleDescriptionUpdate = (index, value) => {
     setFormData((prev) => {
       const copy = [...prev.descriptions];
@@ -335,7 +364,6 @@ export default function ViewEditPortfolio() {
     }));
   };
 
-  // Screenshots
   const handleDeleteImage = (index) => {
     setFormData((prev) => ({
       ...prev,
@@ -359,14 +387,23 @@ export default function ViewEditPortfolio() {
       images: arrayMove(prev.images, oldIndex, newIndex),
     }));
   };
+  const closeCropDialog = () => {
+    // allow selecting same file again
+    if (headerImageInputRef.current) headerImageInputRef.current.value = "";
+    if (screenshotInputRef.current) screenshotInputRef.current.value = "";
 
-  // Header image change
+    setCropDialog({ isOpen: false, imageSrc: null, type: null });
+  };
   const handleHeaderImageChange = (e) => {
     const file = e.target.files?.[0];
-    if (!file) return;
+    if (!file) {
+      e.target.value = "";
+      return;
+    }
 
     if (!file.type.startsWith("image/")) {
       toast.error("Please select an image file");
+      e.target.value = "";
       return;
     }
 
@@ -378,16 +415,23 @@ export default function ViewEditPortfolio() {
         type: "header",
       });
     };
+
     reader.readAsDataURL(file);
+
+    // reset input so same file can be selected again
+    e.target.value = "";
   };
 
-  // Screenshot upload
   const handleScreenshotImageChange = (e) => {
     const file = e.target.files?.[0];
-    if (!file) return;
+    if (!file) {
+      e.target.value = "";
+      return;
+    }
 
     if (!file.type.startsWith("image/")) {
       toast.error("Please select an image file");
+      e.target.value = "";
       return;
     }
 
@@ -399,108 +443,216 @@ export default function ViewEditPortfolio() {
         type: "screenshot",
       });
     };
+
     reader.readAsDataURL(file);
+
+    // allow re-selecting same file later
+    e.target.value = "";
   };
 
-  // Crop callback
   const handleCropComplete = (croppedImageUrl) => {
     if (cropDialog.type === "header") {
       setFormData((prev) => ({
         ...prev,
         header_image_url: croppedImageUrl,
       }));
+
+      // reset input so selecting same image again triggers change
+      if (headerImageInputRef.current) headerImageInputRef.current.value = "";
+
       toast.success("Header image updated");
     } else if (cropDialog.type === "screenshot") {
       setFormData((prev) => ({
         ...prev,
         images: [...prev.images, { image_url: croppedImageUrl, alt_text: "" }],
       }));
+
+      // reset input so selecting same image again triggers change
+      if (screenshotInputRef.current) screenshotInputRef.current.value = "";
+
       toast.success("Screenshot added");
     }
 
-    setCropDialog({ isOpen: false, imageSrc: null, type: null });
+    closeCropDialog();
   };
 
   const handleAddScreenshot = () => {
     screenshotInputRef.current?.click();
   };
 
+  const handleSave = () => {
+    // Validation
+    if (!formData.title.trim()) {
+      toast.error("Project title is required");
+      return;
+    }
+    if (!formData.slug.trim()) {
+      toast.error("Slug is required");
+      return;
+    }
+    if (!formData.project_type.trim()) {
+      toast.error("Project type is required");
+      return;
+    }
+    if (!formData.header_image_url) {
+      toast.error("Header image is required");
+      return;
+    }
+    if (formData.selectedCategories.length === 0) {
+      toast.error("At least 1 category is required");
+      return;
+    }
+    if (formData.descriptions.length < 2) {
+      toast.error("At least 2 description paragraphs are required");
+      return;
+    }
+    if (formData.images.length < 2) {
+      toast.error("At least 2 screenshots are required");
+      return;
+    }
 
-  
+    // ✔ Open confirmation dialog
+    setShowSaveConfirm(true);
+  };
 
-  const handleSave = async () => {
-  if (!formData.title.trim()) {
-    toast.error("Project title is required");
-    return;
-  }
-  if (!formData.slug.trim()) {
-    toast.error("Slug is required");
-    return;
-  }
-  if (formData.selectedCategories.length === 0) {
-    toast.error("Please select at least one category");
-    return;
-  }
+  const performSave = async () => {
+    setShowSaveConfirm(false);
+    setSaving(true);
 
-  setSaving(true);
-  const loadingToast = toast.loading("Compressing & uploading images...");
+    const loadingToast = toast.loading("Uploading images...");
 
-  try {
-    const tech_category = JSON.stringify(
-      formData.selectedCategories
-        .map((catId) => categories.find((c) => c.id === catId)?.slug)
-        .filter(Boolean)
-    );
+    try {
+      const tech_category = JSON.stringify(
+        formData.selectedCategories
+          .map((id) => categories.find((c) => c.id === id)?.slug)
+          .filter(Boolean)
+      );
 
-    // Convert images to WebP
-    const convertedImages = await Promise.all(
-      formData.images.map(async (img, index) => {
-        const response = await fetch(img.image_url);
-        const blob = await response.blob();
-        return await convertToWebP(blob, id, index);
-      })
-    );
+      const images_meta = [];
+      const filesToUpload = [];
 
-    // FormData payload
-    const form = new FormData();
-    form.append("title", formData.title);
-    form.append("slug", formData.slug);
-    form.append("publisher_name", formData.publisher_name);
-    form.append("project_link", formData.project_link);
-    form.append("header_image_url", formData.header_image_url);
-    form.append("tech_category", tech_category);
-    form.append("descriptions", JSON.stringify(formData.descriptions));
+      /* -----------------------------
+       1) HEADER IMAGE
+    ------------------------------ */
+      const headerImg = formData.header_image_url;
 
-    convertedImages.forEach((file) => {
-      form.append("images", file);
-    });
+      if (!headerImg) {
+        throw new Error("Header image required");
+      }
 
-    // 👇 Get token stored locally
-    const token = localStorage.getItem("adminToken");
+      const headerIsNew =
+        headerImg.startsWith("blob:") ||
+        headerImg.startsWith("data:") ||
+        headerImg !== initialFormData.header_image_url;
 
-    // 👇 Send request with Token Auth header
-    await portfolioAPI.update(id, form,token);
+      if (headerIsNew) {
+        const res = await fetch(headerImg);
+        const blob = await res.blob();
+        const file = await convertToWebP(blob, `header_${id}.webp`);
 
-    toast.success("Portfolio updated successfully", { id: loadingToast });
+        images_meta.push({
+          image_url: null,
+          isNew: true,
+          fileIndex: filesToUpload.length,
+        });
 
-    setInitialFormData(JSON.parse(JSON.stringify(formData)));
-    setHasUnsavedChanges(false);
+        filesToUpload.push(file);
+      } else {
+        // unchanged but backend requires REUPLOAD only if reordered
+        images_meta.push({
+          image_url: headerImg,
+          isNew: false,
+          fileIndex: null,
+        });
+      }
 
-    setTimeout(() => {
-      navigate(ROUTES.ADMIN.WEBSITE_MANAGE.PORTFOLIO);
-    }, 800);
+      /* -----------------------------
+       2) SCREENSHOTS (IN ORDER)
+    ------------------------------ */
 
-  } catch (err) {
-    console.error(err);
-    toast.error(err?.response?.data?.message || "Failed to update portfolio", {
-      id: loadingToast,
-    });
-  } finally {
-    setSaving(false);
-  }
-};
+      for (let i = 0; i < formData.images.length; i++) {
+        const img = formData.images[i];
 
+        const isNew =
+          img.image_url.startsWith("blob:") ||
+          img.image_url.startsWith("data:") ||
+          img.image_url !== initialFormData.images[i]?.image_url;
 
+        const orderChanged =
+          img.image_url === initialFormData.images[i]?.image_url
+            ? i !==
+              initialFormData.images.findIndex(
+                (x) => x.image_url === img.image_url
+              )
+            : false;
+
+        // treat any order change as new upload
+        if (isNew || orderChanged) {
+          const res = await fetch(img.image_url);
+          const blob = await res.blob();
+          const file = await convertToWebP(blob, `screenshot_${id}_${i}.webp`);
+
+          images_meta.push({
+            image_url: null,
+            isNew: true,
+            fileIndex: filesToUpload.length,
+          });
+
+          filesToUpload.push(file);
+        } else {
+          images_meta.push({
+            image_url: img.image_url,
+            isNew: false,
+            fileIndex: null,
+          });
+        }
+      }
+
+      /* -----------------------------
+       BUILD FORM DATA
+    ------------------------------ */
+      const form = new FormData();
+
+      form.append("title", formData.title);
+      form.append("slug", formData.slug);
+      form.append("publisher_name", formData.publisher_name);
+      form.append("project_link", formData.project_link);
+      form.append("tech_category", tech_category);
+      form.append("project_type", formData.project_type);
+      form.append("descriptions", JSON.stringify(formData.descriptions));
+
+      form.append("images_meta", JSON.stringify(images_meta));
+
+      filesToUpload.forEach((file) => {
+        form.append("images", file);
+      });
+
+      /* -----------------------------
+       SEND UPDATE TO BACKEND
+    ------------------------------ */
+      const token = localStorage.getItem("adminToken");
+      await portfolioAPI.update(id, form, token);
+
+      toast.success("Portfolio updated successfully", { id: loadingToast });
+
+      setInitialFormData(JSON.parse(JSON.stringify(formData)));
+      setHasUnsavedChanges(false);
+
+      setTimeout(() => {
+        navigate(ROUTES.ADMIN.WEBSITE_MANAGE.PORTFOLIO);
+      }, 600);
+    } catch (err) {
+      console.error(err);
+      toast.error(
+        err?.response?.data?.message || "Failed to update portfolio",
+        {
+          id: loadingToast,
+        }
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const handleBack = () => {
     if (hasUnsavedChanges) {
@@ -520,7 +672,30 @@ export default function ViewEditPortfolio() {
     setShowNavigationWarning(false);
   };
 
-  if (loading) {
+  const handleDelete = async () => {
+    setDeleting(true);
+    const loadingToast = toast.loading("Deleting portfolio...");
+
+    try {
+      const token = localStorage.getItem("adminToken");
+      await portfolioAPI.delete(id, token);
+
+      toast.success("Portfolio deleted successfully", { id: loadingToast });
+
+      navigate(ROUTES.ADMIN.WEBSITE_MANAGE.PORTFOLIO);
+    } catch (err) {
+      console.error(err);
+      toast.error(
+        err?.response?.data?.message || "Failed to delete portfolio",
+        { id: loadingToast }
+      );
+    } finally {
+      setDeleting(false);
+      setShowDeleteConfirm(false);
+    }
+  };
+
+  if (loading || saving || deleting) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-neutral-950">
         <Spinner size="large" />
@@ -541,6 +716,34 @@ export default function ViewEditPortfolio() {
           },
         }}
       />
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <AlertDialogContent className="bg-neutral-900 border-neutral-800">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-white">
+              Delete Portfolio
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-neutral-400">
+              This action cannot be undone. The entire portfolio, images,
+              descriptions, and all related content will be permanently deleted.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          <AlertDialogFooter>
+            <AlertDialogCancel className="bg-neutral-800 text-white hover:bg-neutral-700 border-neutral-700">
+              Cancel
+            </AlertDialogCancel>
+
+            <AlertDialogAction
+              onClick={handleDelete}
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              Yes, Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Navigation Warning Dialog */}
       <AlertDialog
@@ -573,13 +776,36 @@ export default function ViewEditPortfolio() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      <AlertDialog open={showSaveConfirm} onOpenChange={setShowSaveConfirm}>
+        <AlertDialogContent className="bg-neutral-900 border-neutral-800">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-white">
+              Confirm Save
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-neutral-400">
+              Are you sure you want to save changes to this portfolio?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          <AlertDialogFooter>
+            <AlertDialogCancel className="bg-neutral-800 text-white hover:bg-neutral-700 border-neutral-700">
+              Cancel
+            </AlertDialogCancel>
+
+            <AlertDialogAction
+              onClick={performSave}
+              className="bg-primary hover:bg-primary/90 text-white"
+            >
+              Yes, Save
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Crop Dialog */}
       <ImageCropDialog
         isOpen={cropDialog.isOpen}
-        onClose={() =>
-          setCropDialog({ isOpen: false, imageSrc: null, type: null })
-        }
+        onClose={closeCropDialog}
         imageSrc={cropDialog.imageSrc}
         onCropComplete={handleCropComplete}
         aspectRatio={3 / 2}
@@ -636,7 +862,23 @@ export default function ViewEditPortfolio() {
             </div>
 
             <div className="flex items-center gap-2">
-            
+              <Button
+                variant="destructive"
+                onClick={() => setShowDeleteConfirm(true)}
+                className=" text-white font-medium disabled:opacity-50"
+              >
+                {deleting ? (
+                  <>
+                    <Spinner size="small" className="mr-2" />
+                    Deleting...
+                  </>
+                ) : (
+                  <>
+                    <Icon icon={ICON_ASSETS.DELETE} className="w-5 h-5 mr-2" />
+                    Delete Portfolio
+                  </>
+                )}
+              </Button>
               <Button
                 onClick={handleSave}
                 disabled={saving || !hasUnsavedChanges}
@@ -660,7 +902,7 @@ export default function ViewEditPortfolio() {
 
         {/* Main Content */}
         <div className="px-6 py-8">
-          <div className="space-y-6 max-w-7xl mx-auto">
+          <div className="space-y-6  mx-auto">
             {/* Basic Information */}
             <Card className="bg-neutral-900 border-neutral-800">
               <CardHeader className="border-b border-neutral-800">
@@ -713,6 +955,19 @@ export default function ViewEditPortfolio() {
                   </div>
                   <div>
                     <Label className="text-neutral-300 mb-1.5 block">
+                      Project Type <span className="text-red-400">*</span>
+                    </Label>
+                    <Input
+                      value={formData.project_type}
+                      onChange={(e) =>
+                        handleInputChange("project_type", e.target.value)
+                      }
+                      className="bg-neutral-800 border-neutral-700 text-white"
+                      placeholder="Project Type"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-neutral-300 mb-1.5 block">
                       Publisher / Company
                     </Label>
                     <Input
@@ -726,7 +981,7 @@ export default function ViewEditPortfolio() {
                   </div>
                   <div>
                     <Label className="text-neutral-300 mb-1.5 block">
-                      Project URL
+                      Project URL <span className="text-red-400">*</span>
                     </Label>
                     <Input
                       type="url"
@@ -739,61 +994,6 @@ export default function ViewEditPortfolio() {
                     />
                   </div>
                 </div>
-              </CardContent>
-            </Card>
-
-            {/* Header Image */}
-            <Card className="bg-neutral-900 border-neutral-800">
-              <CardHeader className="border-b border-neutral-800">
-                <CardTitle className="text-white flex items-center gap-2">
-                  <Icon icon="mdi:image" className="w-5 h-5 text-primary" />
-                  Header Image (3:2 Ratio)
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-6">
-                {formData.header_image_url ? (
-                  <div className="relative rounded-lg overflow-hidden border border-neutral-700 bg-neutral-800 aspect-[3/2] max-w-3xl mx-auto">
-                    <img
-                      src={formData.header_image_url}
-                      alt={formData.title || "Header preview"}
-                      className="w-full h-full object-cover"
-                    />
-                    <div className="absolute inset-0 bg-black/50 opacity-0 hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
-                      <Button
-                        onClick={() => headerImageInputRef.current?.click()}
-                        className="bg-primary hover:bg-primary/90"
-                      >
-                        <Icon icon="mdi:image-edit" className="w-5 h-5 mr-2" />
-                        Change Image
-                      </Button>
-                      <Button
-                        variant="destructive"
-                        onClick={() =>
-                          handleInputChange("header_image_url", "")
-                        }
-                      >
-                        <Icon icon="mdi:delete" className="w-5 h-5 mr-2" />
-                        Remove
-                      </Button>
-                    </div>
-                  </div>
-                ) : (
-                  <div
-                    onClick={() => headerImageInputRef.current?.click()}
-                    className="border-2 border-dashed border-neutral-700 rounded-lg p-12 text-center cursor-pointer hover:border-primary hover:bg-neutral-800/50 transition-all aspect-[3/2] max-w-3xl mx-auto flex flex-col items-center justify-center"
-                  >
-                    <Icon
-                      icon="mdi:cloud-upload"
-                      className="w-16 h-16 text-neutral-600 mb-4"
-                    />
-                    <p className="text-neutral-400 text-sm mb-2">
-                      Click to upload header image
-                    </p>
-                    <p className="text-neutral-500 text-xs">
-                      Image will be cropped to 3:2 ratio
-                    </p>
-                  </div>
-                )}
               </CardContent>
             </Card>
 
@@ -814,17 +1014,20 @@ export default function ViewEditPortfolio() {
                   {categories.map((category) => (
                     <div
                       key={category.id}
-                      className="flex items-center gap-2 p-2 rounded-lg bg-neutral-800 border border-neutral-700 hover:border-primary/80 transition-colors"
+                      onClick={() => handleCategoryToggle(category.id)}
+                      className="flex items-center gap-2 p-2 rounded-lg bg-neutral-800 border border-neutral-700 hover:border-primary/80 transition-colors cursor-pointer"
                     >
                       <Checkbox
                         checked={formData.selectedCategories.includes(
                           category.id
                         )}
-                        onCheckedChange={() =>
-                          handleCategoryToggle(category.id)
-                        }
+                        onCheckedChange={(e) => {
+                          e.stopPropagation(); // prevent double trigger
+                          handleCategoryToggle(category.id);
+                        }}
                         className="border-neutral-600"
                       />
+
                       <span className="text-neutral-300 text-sm capitalize">
                         {category.name}
                       </span>
@@ -882,6 +1085,7 @@ export default function ViewEditPortfolio() {
                           index={index}
                           onUpdate={handleDescriptionUpdate}
                           onDelete={handleDeleteDescription}
+                          descriptionCount={formData.descriptions.length}
                         />
                       ))}
                     </div>
@@ -899,6 +1103,70 @@ export default function ViewEditPortfolio() {
                     </p>
                     <p className="text-neutral-500 text-xs mt-1">
                       Click "Add Paragraph" to create content
+                    </p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Header Image */}
+            <Card className="bg-neutral-900 border-neutral-800">
+              <CardHeader className="border-b border-neutral-800">
+                <CardTitle className="text-white flex items-center gap-2">
+                  <Icon icon="mdi:image" className="w-5 h-5 text-primary" />
+                  Header Image (3:2 Ratio)
+                </CardTitle>
+              </CardHeader>
+
+              <CardContent className="p-6">
+                {formData.header_image_url ? (
+                  <div className="relative rounded-lg overflow-hidden border border-neutral-700 bg-neutral-900 aspect-[3/2] max-w-3xl mx-auto">
+                    <img
+                      src={formData.header_image_url}
+                      alt={formData.title || "Header preview"}
+                      className="w-full h-full object-contain"
+                    />
+
+                    {/* Hover Overlay */}
+                    <div className="absolute inset-0 bg-black/50 opacity-0 hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
+                      <Button
+                        onClick={() => headerImageInputRef.current?.click()}
+                        className="bg-primary hover:bg-primary/90"
+                      >
+                        <Icon icon="mdi:image-edit" className="w-5 h-5 mr-2" />
+                        Change Image
+                      </Button>
+
+                      <Button
+                        variant="destructive"
+                        onClick={() => {
+                          handleInputChange("header_image_url", "");
+                          if (headerImageInputRef.current)
+                            headerImageInputRef.current.value = "";
+                        }}
+                      >
+                        <Icon
+                          icon={ICON_ASSETS.DELETE}
+                          className="w-5 h-5 mr-2"
+                        />
+                        Remove
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div
+                    onClick={() => headerImageInputRef.current?.click()}
+                    className="border-2 border-dashed border-neutral-700 rounded-lg p-12 text-center cursor-pointer hover:border-primary hover:bg-neutral-800/50 transition-all aspect-[3/2] max-w-3xl mx-auto flex flex-col items-center justify-center"
+                  >
+                    <Icon
+                      icon="mdi:cloud-upload"
+                      className="w-16 h-16 text-neutral-600 mb-4"
+                    />
+                    <p className="text-neutral-400 text-sm mb-2">
+                      Click to upload header image
+                    </p>
+                    <p className="text-neutral-500 text-xs">
+                      Image will be cropped to 3:2 ratio
                     </p>
                   </div>
                 )}
