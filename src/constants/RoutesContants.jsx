@@ -28,7 +28,7 @@ export const ROUTES = {
             SERVICES: "/admin/services",
             COURSES: "/admin/courses",
             BLOGS: "/admin/blogs",
-            CATEGORIES:"/admin/categories",
+            CATEGORIES:"/admin/portfolio/categories",
         }
     }
 

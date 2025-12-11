@@ -118,14 +118,14 @@ export default function AdminCategories() {
   };
 
   return (
-    <div className="min-h-screen bg-neutral-950 px-6 py-8">
+    <div className="min-h-screen bg-neutral-950 p-8">
       <Toaster position="top-right" />
 
       {/* Page Header */}
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-3xl font-bold text-white flex items-center gap-2">
-            <Icon icon="mdi:tag-multiple" className="w-7 h-7 text-primary" />
+           
             Manage Categories
           </h1>
           <p className="text-neutral-400 text-sm mt-1">
